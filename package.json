@@ -1,0 +1,56 @@
+{
+  "name": "hospital-ai-os",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "node scripts/check-node.mjs serve && next dev",
+    "build": "node scripts/check-node.mjs && next build",
+    "start": "node scripts/check-node.mjs serve && next start",
+    "test:load": "node tests/load.mjs",
+    "lint": "eslint",
+    "typecheck": "tsc --noEmit",
+    "test:api": "node tests/suite.mjs",
+    "test:ui": "node tests/ui.mjs",
+    "test": "node tests/suite.mjs && node tests/clinical.mjs && node tests/auth.mjs && node tests/crud.mjs && node tests/security.mjs && node tests/concurrency.mjs && node tests/ui.mjs && node tests/clinical-ui.mjs && node tests/ux.mjs && node tests/connected.mjs && node tests/auth-ui.mjs",
+    "test:connected": "node tests/connected.mjs",
+    "db:reset": "rm -rf .data && echo 'Database reset — demo hospitals will be reseeded on next boot'",
+    "test:clinical": "node tests/clinical.mjs",
+    "test:ui:clinical": "node tests/clinical-ui.mjs",
+    "backup": "node scripts/backup.mjs",
+    "restore": "node scripts/restore.mjs",
+    "test:disaster": "node tests/disaster.mjs",
+    "test:auth": "node tests/auth.mjs && node tests/auth-ui.mjs",
+    "demo:reset": "node scripts/reset-demo.mjs",
+    "test:security": "node tests/security.mjs",
+    "test:concurrency": "node tests/concurrency.mjs",
+    "test:crud": "node tests/crud.mjs"
+  },
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.1131.0",
+    "exceljs": "^4.4.0",
+    "lucide-react": "^1.45.0",
+    "next": "15.5.25",
+    "qrcode": "^1.5.4",
+    "react": "19.1.0",
+    "react-dom": "19.1.0",
+    "react-is": "^19.3.0",
+    "recharts": "^3.10.1"
+  },
+  "devDependencies": {
+    "@eslint/eslintrc": "^3",
+    "@tailwindcss/postcss": "^4",
+    "@types/node": "^22.20.2",
+    "@types/qrcode": "^1.5.6",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "eslint": "^9",
+    "eslint-config-next": "15.5.25",
+    "playwright": "^1.63.0",
+    "tailwindcss": "^4",
+    "tsx": "^4.23.13",
+    "typescript": "^5"
+  },
+  "engines": {
+    "node": ">=22.5.0"
+  }
+}

@@ -1,0 +1,68 @@
+# Render Blueprint — one web service with a persistent disk.
+#
+# This is the whole deployment. There is no database service here, and that is
+# deliberate: Hospital AI OS keeps its data in a SQLite file, so what it needs
+# is a disk, not a Postgres instance. Adding one would cost money and change
+# nothing, because no code would talk to it.
+#
+# The two constraints Render places on a service with a disk are the two this
+# application already lives under, so neither is a compromise:
+#
+#   · A disk is attached to exactly ONE instance — the service cannot scale
+#     horizontally. This app is a single process anyway: live ward updates and
+#     rate limiting are held in memory in that process.
+#   · Deploys are NOT zero-downtime. Render stops the old instance before
+#     starting the new one, so the file is never open twice. Expect a short gap
+#     on every deploy and schedule them accordingly — a hospital should not
+#     find the system down mid ward-round.
+#
+# A disk requires a paid instance type. `plan` is left out so Render applies its
+# current default rather than a plan name hard-coded here that may since have
+# been renamed; pick the instance in the dashboard before the first deploy.
+
+services:
+  - type: web
+    name: hospital-ai-os
+    runtime: node
+
+    # Singapore is the closest region Render offers. There is no India region.
+    # For a hospital asking about data residency, that is a fact to put in front
+    # of them rather than discover later — see DEPLOYMENT.md.
+    region: singapore
+
+    buildCommand: npm ci && npm run build
+    startCommand: npm start
+
+    # Answers 200 when healthy or degraded and 503 when the database is
+    # unreachable, the disk is nearly full, or backups have stopped.
+    healthCheckPath: /api/health
+
+    disk:
+      name: hospital-data
+      # Everything lives here: the SQLite database, call recordings and export
+      # bundles. Only paths under the mount survive a deploy.
+      mountPath: /var/data
+      # 10 GB is generous for records and modest for audio. Disks can be grown
+      # later but never shrunk, so this errs small deliberately.
+      sizeGB: 10
+
+    envVars:
+      - key: DATA_DIR
+        value: /var/data
+
+      - key: NODE_ENV
+        value: production
+
+      # A 256-bit value, generated once by Render and kept across deploys.
+      # Recordings and export bundles are encrypted with it.
+      #
+      # KEEP A COPY SOMEWHERE SAFE. If this value is lost, every file already
+      # written with it is unrecoverable — that is what encryption at rest
+      # means, and there is no back door.
+      - key: STORAGE_ENCRYPTION_KEY
+        generateValue: true
+
+      # No demo hospitals on a server that will hold real patients: their
+      # accounts share a password. Set this to 1 only on a throwaway demo box.
+      - key: SEED_DEMO
+        value: "0"

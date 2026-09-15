@@ -1,0 +1,68 @@
+# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
+
+# dependencies
+node_modules/
+/.pnp
+.pnp.*
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/versions
+
+# testing
+/coverage
+
+# next.js
+/.next/
+/out/
+
+# production
+/build
+
+# misc
+.DS_Store
+*.pem
+
+# debug
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# env files (can opt-in for committing if needed)
+.env*
+!.env.example
+
+# vercel
+.vercel
+
+# typescript
+*.tsbuildinfo
+next-env.d.ts
+
+# the live database, recordings and export bundles
+#
+# Never commit this. It is the hospital's records, it carries password hashes
+# and session tokens, and on a real deployment it lives on a mounted disk
+# (DATA_DIR) rather than travelling with the code.
+/.data/
+/backups/
+/.drill-backups/
+
+# Generated output, caches, local records and credentials
+dist/
+*.log
+.cache/
+.turbo/
+*.db
+*.db-*
+*.sqlite
+*.sqlite-*
+*.sqlite3
+*.key
+*.p12
+*.pfx
+.envrc
+playwright-report/
+test-results/
