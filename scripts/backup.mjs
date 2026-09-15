@@ -26,7 +26,7 @@ import { execFileSync } from "node:child_process";
 
 const DATA_DIR = process.env.DATA_DIR ?? path.join(process.cwd(), ".data");
 const DB_PATH = process.env.DATABASE_FILE ?? path.join(DATA_DIR, "hospital-ai-os.db");
-const DEST_ROOT = process.argv[2] ?? path.join(process.cwd(), "backups");
+const DEST_ROOT = process.argv[2] ?? process.env.BACKUP_DIR ?? path.join(process.cwd(), "backups");
 const KEEP = Number(process.env.KEEP ?? 7);
 
 if (!fs.existsSync(DB_PATH)) {

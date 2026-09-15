@@ -50,6 +50,9 @@ services:
       - key: DATA_DIR
         value: /var/data
 
+      - key: BACKUP_DIR
+        value: /var/data/backups
+
       - key: NODE_ENV
         value: production
 
