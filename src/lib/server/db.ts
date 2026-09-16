@@ -287,6 +287,18 @@ function migrate(conn: DatabaseSync) {
     );
     CREATE INDEX IF NOT EXISTS recordings_org ON recordings (org_id, created_at DESC);
 
+    /* Providers retry webhooks and may send several terminal events for one
+       call. Claiming the provider call id before writing the chart prevents a
+       retry from creating a second clinical record or billing minutes twice. */
+    CREATE TABLE IF NOT EXISTS provider_events (
+      provider     TEXT NOT NULL,
+      org_id       TEXT NOT NULL,
+      event_key    TEXT NOT NULL,
+      processed_at TEXT NOT NULL,
+      PRIMARY KEY (provider, org_id, event_key)
+    );
+    CREATE INDEX IF NOT EXISTS provider_events_at ON provider_events (processed_at);
+
     CREATE TABLE IF NOT EXISTS export_jobs (
       id            TEXT PRIMARY KEY,
       org_id        TEXT NOT NULL,

@@ -1,5 +1,5 @@
 import { handler } from "@/lib/server/route";
-import { getSession, toSessionUser, type DbUser } from "@/lib/server/auth";
+import { getSession, toSessionUser, userCan, type DbUser } from "@/lib/server/auth";
 import { all, get, settings } from "@/lib/server/db";
 import { ALL_FEATURES, DEFAULT_STORAGE, DEFAULT_VOICE, getSubscription, listOrganizations } from "@/lib/server/provision";
 import { redactSecrets } from "@/lib/server/secrets";
@@ -29,8 +29,25 @@ export async function GET() {
     const orgRow = get<Record<string, unknown>>("SELECT * FROM organizations WHERE id = ?", [orgId]);
     if (!orgRow) return { authenticated: true, user: session.user, org: null };
 
-    const users = all<DbUser>("SELECT * FROM users WHERE org_id = ? ORDER BY created_at DESC LIMIT 500", [orgId])
-      .map(toSessionUser);
+    /* Staff directory data includes names, email addresses, phone numbers,
+       roles and security posture. Only user administrators need it in the
+       workspace bootstrap; everybody else gets an empty list. */
+    const users = userCan(session.user, "users.manage")
+      ? all<DbUser>("SELECT * FROM users WHERE org_id = ? ORDER BY created_at DESC LIMIT 500", [orgId]).map(toSessionUser)
+      : [];
+
+    const mayReadSetting = (key: string) => {
+      if (key === "storage") return userCan(session.user, "org.configure");
+      if (key === "voice" || key === "knowledge") return userCan(session.user, "agents.configure");
+      if (key === "telephony") return userCan(session.user, "telephony.configure");
+      if (key === "analytics.series") return userCan(session.user, "analytics.view");
+      if (key === "escalation") {
+        return userCan(session.user, "protocols.configure") ||
+          userCan(session.user, "calls.initiate") ||
+          userCan(session.user, "escalations.resolve");
+      }
+      return false;
+    };
 
     const org = {
       id: orgRow.id, name: orgRow.name, shortName: orgRow.short_name, slug: orgRow.slug, city: orgRow.city,
@@ -86,7 +103,7 @@ export async function GET() {
        * between a receptionist's DevTools and the hospital's API keys.
        */
       settings: Object.fromEntries(
-        Object.entries(settings.all(orgId)).map(([k, v]) => {
+        Object.entries(settings.all(orgId)).filter(([k]) => mayReadSetting(k)).map(([k, v]) => {
           /* Complete the blob before redacting, so a screen reading a field a
              tenant's stored JSON predates gets a default rather than a crash. */
           const base = k === "voice" ? DEFAULT_VOICE : k === "storage" ? DEFAULT_STORAGE : null;

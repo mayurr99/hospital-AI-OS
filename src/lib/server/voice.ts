@@ -258,18 +258,11 @@ export function voiceConfigFor(orgId: string): VoiceConfig {
 
 export async function placeCall(orgId: string, to: string, metadata: Record<string, unknown>): Promise<PlacedCall> {
   const cfg = voiceConfigFor(orgId);
-  if (cfg.telephonyProvider === "retell" && cfg.retell.apiKey && cfg.retell.fromNumber) {
-    try {
-      return await retell.createCall(cfg, to, metadata);
-    } catch (e) {
-      return {
-        providerCallId: `sim_${Date.now().toString(36)}`,
-        status: "fallback",
-        provider: "simulator",
-        simulated: true,
-        detail: `Retell unavailable (${e instanceof Error ? e.message : "error"}) — fell back to the simulator so the workflow continued`,
-      };
+  if (cfg.telephonyProvider === "retell") {
+    if (!cfg.retell.apiKey || !cfg.retell.fromNumber) {
+      throw new Error("Retell is selected but its API key or outbound number is missing");
     }
+    return retell.createCall(cfg, to, metadata);
   }
   return simulator.createCall(to);
 }
@@ -280,7 +273,10 @@ export async function forwardToHuman(
   toNumber: string,
 ): Promise<{ ok: boolean; detail: string; simulated: boolean }> {
   const cfg = voiceConfigFor(orgId);
-  if (cfg.telephonyProvider === "retell" && cfg.retell.apiKey && !providerCallId.startsWith("sim_")) {
+  if (cfg.telephonyProvider === "retell") {
+    if (!cfg.retell.apiKey || !providerCallId || providerCallId.startsWith("sim_")) {
+      return { ok: false, detail: "The live call cannot be transferred because Retell is not fully connected", simulated: false };
+    }
     const r = await retell.transferCall(cfg.retell.apiKey, providerCallId, toNumber);
     return { ...r, simulated: false };
   }

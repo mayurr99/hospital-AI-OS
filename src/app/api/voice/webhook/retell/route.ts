@@ -2,7 +2,9 @@ import { legacyPatientById } from "@/lib/server/patients";
 import { NextResponse } from "next/server";
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { all, id, nowIso, records, run, settings, writeAudit } from "@/lib/server/db";
+import { tx } from "@/lib/server/domain";
 import { DEFAULT_VOICE, type VoiceConfig } from "@/lib/server/provision";
+import { WEBHOOK_PER_IP, callerIp, hit } from "@/lib/server/ratelimit";
 import type { CallSession, Patient } from "@/lib/types";
 
 /**
@@ -33,7 +35,18 @@ function verify(secret: string, raw: string, signature: string | null) {
 }
 
 export async function POST(req: Request) {
+  const limit = hit(`retell:${callerIp(req)}`, WEBHOOK_PER_IP);
+  if (!limit.allowed) {
+    return NextResponse.json(
+      { error: "Too many webhook requests" },
+      { status: 429, headers: { "Retry-After": String(limit.retryAfter) } },
+    );
+  }
+  const declared = Number(req.headers.get("content-length") ?? 0);
+  if (declared > 1_000_000) return NextResponse.json({ error: "Webhook body too large" }, { status: 413 });
+
   const raw = await req.text();
+  if (raw.length > 1_000_000) return NextResponse.json({ error: "Webhook body too large" }, { status: 413 });
   let payload: Record<string, unknown> = {};
   try {
     payload = JSON.parse(raw);
@@ -50,7 +63,11 @@ export async function POST(req: Request) {
   if (!org) return NextResponse.json({ error: "Unknown tenant" }, { status: 404 });
 
   const voice = settings.get<VoiceConfig>(orgId, "voice", DEFAULT_VOICE);
-  if (!verify(voice.retell.webhookSecret, raw, req.headers.get("x-retell-signature"))) {
+  /* Retell's documented verifier uses the account API key. Keep accepting the
+     separately configured signing key for existing tenants that use one. */
+  const signature = req.headers.get("x-retell-signature");
+  const valid = verify(voice.retell.apiKey, raw, signature) || verify(voice.retell.webhookSecret, raw, signature);
+  if (!valid) {
     writeAudit({ orgId, actor: "retell", actorRole: "super_admin", action: "webhook.signature.invalid", target: String(call.call_id ?? ""), severity: "critical" });
     return NextResponse.json({ error: "Bad signature" }, { status: 401 });
   }
@@ -58,10 +75,14 @@ export async function POST(req: Request) {
   const event = String(payload.event ?? call.call_status ?? "unknown");
   const patient = metadata.patientId ? legacyPatientById(orgId, metadata.patientId) as Patient | null : null;
 
-  if (event === "call_ended" || event === "call_analyzed") {
+  /* call_ended is followed by call_analyzed. The latter contains the final
+     analysis, and Retell retries it up to three times. Persist exactly that
+     event once per provider call. */
+  if (event === "call_analyzed") {
     const durationMs = Number(call.duration_ms ?? 0);
     const seconds = Math.max(1, Math.round(durationMs / 1000));
-    const callId = id("call");
+    const providerCallId = String(call.call_id ?? "");
+    if (!providerCallId) return NextResponse.json({ error: "Missing call id" }, { status: 400 });
     const transcript = Array.isArray(call.transcript_object)
       ? (call.transcript_object as Record<string, unknown>[]).map((t, i) => ({
           speaker: String(t.role) === "agent" ? ("agent" as const) : ("patient" as const),
@@ -70,7 +91,17 @@ export async function POST(req: Request) {
         }))
       : [];
 
-    if (patient) {
+    let duplicate = false;
+    if (patient) tx(() => {
+      const claimed = run(
+        "INSERT OR IGNORE INTO provider_events (provider, org_id, event_key, processed_at) VALUES (?,?,?,?)",
+        ["retell", orgId, providerCallId, nowIso()],
+      );
+      if (Number(claimed.changes) === 0) {
+        duplicate = true;
+        return;
+      }
+      const callId = id("call");
       const record: CallSession = {
         id: callId,
         orgId,
@@ -104,7 +135,8 @@ export async function POST(req: Request) {
         nowIso(),
         orgId,
       ]);
-    }
+    });
+    if (duplicate) return NextResponse.json({ ok: true, duplicate: true });
   }
 
   writeAudit({

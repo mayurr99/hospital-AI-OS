@@ -20,6 +20,7 @@
  */
 import { signIn, enrolledSecrets } from "./signin.mjs";
 import { freshCode } from "./totp-client.mjs";
+import { createHmac } from "node:crypto";
 
 const BASE = process.env.BASE ?? "http://localhost:3100";
 
@@ -245,6 +246,17 @@ await part("4. Privilege escalation — the nurse promoting herself", async () =
   /* Suspending the boss would be a neat way to take over a hospital. */
   const suspend = await nurse.json(`/api/users/${aNurseId}`, "PATCH", { status: "suspended" });
   refused("a nurse cannot change account status", blocked(suspend), "high", `HTTP ${suspend.status}`);
+});
+
+/* ================================================================== */
+await part("4b. Bootstrap privacy — limited staff receive no admin directory or configuration", async () => {
+  const boot = await nurse.req("/api/bootstrap");
+  const users = Array.isArray(boot.body?.users) ? boot.body.users : [];
+  const settings = boot.body?.settings ?? {};
+  refused("a nurse is not sent the hospital staff directory", users.length === 0, "high", `${users.length} users`);
+  refused("a nurse is not sent storage configuration", !("storage" in settings), "high");
+  refused("a nurse is not sent voice-provider configuration", !("voice" in settings), "high");
+  refused("a nurse is not sent telephony configuration", !("telephony" in settings), "high");
 });
 
 /* ================================================================== */
@@ -548,6 +560,42 @@ await part("17. The voice webhook — can anyone post events into a hospital?", 
    */
   const accepted = res.ok && !/not configured|signature|secret/i.test(JSON.stringify(res.body ?? ""));
   refused("an unsigned webhook event is not silently accepted", !accepted, "high", `HTTP ${res.status} ${JSON.stringify(res.body ?? "").slice(0, 60)}`);
+
+  const current = await A.req("/api/settings/voice");
+  const signingKey = `retell-test-${uniq}`;
+  const configured = {
+    ...(current.body?.value ?? {}),
+    retell: { ...(current.body?.value?.retell ?? {}), apiKey: signingKey, webhookSecret: "" },
+  };
+  await A.json("/api/settings/voice", "PUT", { value: configured });
+
+  const providerCallId = `retell-idempotency-${uniq}`;
+  const summary = `single webhook record ${uniq}`;
+  const payload = JSON.stringify({
+    event: "call_analyzed",
+    call: {
+      call_id: providerCallId,
+      agent_id: "test-agent",
+      duration_ms: 65_000,
+      start_timestamp: Date.now() - 65_000,
+      metadata: { orgId: orgA, patientId: patientA, agentType: "care" },
+      transcript_object: [{ role: "agent", content: "Follow-up complete" }],
+      call_analysis: { call_summary: summary },
+    },
+  });
+  const signature = createHmac("sha256", signingKey).update(payload).digest("hex");
+  const send = () => A.req("/api/voice/webhook/retell", {
+    method: "POST",
+    headers: { "x-retell-signature": signature },
+    body: payload,
+  });
+  const first = await send();
+  const retry = await send();
+  const calls = await A.req("/api/collections?kinds=call");
+  const matching = (calls.body?.call ?? []).filter((c) => c.summary === summary);
+  refused("a valid signed webhook is accepted", first.ok, "high", `HTTP ${first.status}`);
+  refused("a provider retry is acknowledged", retry.ok, "high", `HTTP ${retry.status}`);
+  refused("a retried webhook creates exactly one clinical call", matching.length === 1, "critical", `${matching.length} records`);
 });
 
 /* ================================================================== */

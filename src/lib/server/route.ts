@@ -55,7 +55,10 @@ export function handler<T>(fn: () => Promise<T>) {
       }
       const message = e instanceof Error ? e.message : "Unexpected error";
       console.error("[api]", message);
-      return NextResponse.json({ error: message }, { status: 500 });
+      /* Unknown failures stay in the server log. Returning the raw exception
+         can disclose SQL, file paths, provider responses or implementation
+         details to the person probing the endpoint. */
+      return NextResponse.json({ error: "Unexpected server error" }, { status: 500 });
     }
   })();
 }

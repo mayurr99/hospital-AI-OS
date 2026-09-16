@@ -102,8 +102,8 @@ server (never linked from the bucket), and every playback writes an audit event.
   locally with no vendor and no spend. This is what a new tenant gets by default.
 
 Both providers have a live **Test connection** that reports the real result. API keys are stored server-side
-and returned to the browser masked; re-saving a masked value keeps the stored secret. If Retell is
-unreachable mid-workflow the platform falls back to the simulator rather than dropping the follow-up.
+and returned to the browser masked; re-saving a masked value keeps the stored secret. A failed live call is
+reported as a failure and is never silently converted into a simulated call.
 
 Everything the platform needs from a voice vendor sits behind one interface (`src/lib/server/voice.ts`), so
 adding a fourth provider is a single file and no screen changes.

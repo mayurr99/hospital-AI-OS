@@ -132,8 +132,8 @@ export default function VoiceSettingsPage() {
             >
               <p className="text-sm font-semibold text-ink-900">Retell + ElevenLabs (live)</p>
               <p className="mt-1 text-xs leading-relaxed text-ink-600">
-                Real inbound and outbound calls on your Retell number, spoken with your ElevenLabs voice. If Retell is
-                unreachable mid-workflow the platform falls back to the simulator rather than dropping the follow-up.
+                Real inbound and outbound calls on your Retell number, spoken with your ElevenLabs voice. A provider
+                failure is shown clearly so a simulated call can never be mistaken for a completed patient call.
               </p>
               <Badge tone="amber" className="mt-2">Requires your API keys</Badge>
             </button>
