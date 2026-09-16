@@ -66,6 +66,13 @@ export async function POST(req: Request) {
     const user = b.orgId ? matching.find((u) => u.org_id === b.orgId) ?? matching[0] : matching[0];
     if (user.status === "suspended") throw new HttpError(403, "This account has been suspended by your administrator");
     if (user.status === "invited") throw new HttpError(403, "This invitation has not been accepted yet");
+    if (user.org_id) {
+      const org = get<{ status: string }>("SELECT status FROM organizations WHERE id = ?", [user.org_id]);
+      const subscription = get<{ status: string }>("SELECT status FROM subscriptions WHERE org_id = ?", [user.org_id]);
+      if (!org || org.status === "suspended" || subscription?.status === "suspended" || subscription?.status === "cancelled") {
+        throw new HttpError(403, "This hospital workspace is not active. Contact the platform administrator.");
+      }
+    }
 
     /* A successful sign-in forgives the attempts that led to it. */
     clear(`login:acct:${email}`);

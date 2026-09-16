@@ -7,6 +7,7 @@ import { Denied } from "@/components/AppShell";
 import { Badge, Button, Card, CardHeader, EmptyState, Field, Input, Modal, PageHeader, Progress, Select, StatTile, Table, Td, Textarea, Th, Tr } from "@/components/ui";
 import { fmtDate, inr, pct, relative } from "@/lib/utils";
 import { AlertTriangle, ArrowUpRight, Building2, Globe2, IndianRupee, Lock, Radio, Users } from "lucide-react";
+import { SUBSCRIPTION_PLAN_KEYS } from "@/lib/plans";
 
 interface Tenant {
   id: string;
@@ -192,7 +193,7 @@ export default function PlatformPage() {
         {managing?.subscription && <div className="space-y-4">
           <div className="grid gap-3 sm:grid-cols-2">
             <Field label="Plan"><Select value={managing.subscription.plan} onChange={(e) => setManaging({ ...managing, plan: e.target.value, subscription: { ...managing.subscription!, plan: e.target.value } })}>
-              {['trial','care','growth','enterprise'].map((v) => <option key={v} value={v}>{v}</option>)}
+              {SUBSCRIPTION_PLAN_KEYS.map((v) => <option key={v} value={v}>{v.replaceAll('_', ' ')}</option>)}
             </Select></Field>
             <Field label="Billing status"><Select value={managing.subscription.status} onChange={(e) => setManaging({ ...managing, subscription: { ...managing.subscription!, status: e.target.value } })}>
               {['trialing','active','past_due','suspended','cancelled'].map((v) => <option key={v} value={v}>{v.replaceAll('_',' ')}</option>)}

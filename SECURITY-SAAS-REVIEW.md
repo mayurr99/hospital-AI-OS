@@ -18,6 +18,7 @@ No automated review can prove that software is “unhackable.” This review rec
 - TypeScript compilation and the production build pass. Lint has five existing unused-variable warnings and no errors.
 - Patient edits use optimistic concurrency, a bed cannot have two active admissions, hospital numbers are unique, append-only observations are preserved, and SQLite runs with WAL and busy-timeout protection.
 - Sessions are HTTP-only, same-site cookies; authorization is enforced server-side; tenant ids come from the signed-in session; sensitive routes are permission-gated; secrets are masked in browser responses.
+- Suspending or cancelling a hospital now revokes its active sessions immediately, blocks new sign-ins, and prevents platform staff from opening that hospital workspace until it is reactivated.
 - Recordings and exports support AES-256-GCM application encryption when `STORAGE_ENCRYPTION_KEY` is configured.
 - Audit events cannot be created, edited or deleted through the public record APIs.
 
@@ -29,6 +30,8 @@ No automated review can prove that software is “unhackable.” This review rec
 4. **Server detail leakage.** Unexpected exceptions are logged on the server while clients receive a generic error.
 5. **Known package vulnerabilities.** Patched transitive versions are locked and the production audit is clean.
 6. **False call success.** If a live voice provider fails, the request now fails visibly. It can no longer be silently changed into a simulated call.
+7. **Incomplete hospital suspension.** A platform status change previously updated billing labels without ending active tenant sessions. Suspension and cancellation now revoke those sessions and are enforced during every session lookup and new sign-in.
+8. **Plan mismatch.** The platform console offered a `growth` plan that the product did not understand elsewhere. All pricing and plan validation now use one shared catalog.
 
 ## Data-overwrite guarantees and limits
 

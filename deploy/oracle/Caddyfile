@@ -1,0 +1,15 @@
+{$DOMAIN} {
+  encode zstd gzip
+  reverse_proxy app:3000
+
+  header {
+    -Server
+    X-Robots-Tag "noindex, nofollow"
+  }
+
+  log {
+    output stdout
+    format json
+  }
+}
+

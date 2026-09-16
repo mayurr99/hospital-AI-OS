@@ -49,6 +49,8 @@ next-env.d.ts
 /.data/
 /backups/
 /.drill-backups/
+/.oracle-data/
+/.oracle-backups/
 
 # Generated output, caches, local records and credentials
 dist/

@@ -232,7 +232,16 @@ export async function getSession(): Promise<Session | null> {
   }
   const u = get<DbUser>("SELECT * FROM users WHERE id = ?", [row.user_id]);
   if (!u || u.status === "suspended") return null;
-  return { user: toSessionUser(u), orgId: row.org_id ?? u.org_id, token };
+  const orgId = row.org_id ?? u.org_id;
+  if (orgId) {
+    const org = get<{ status: string }>("SELECT status FROM organizations WHERE id = ?", [orgId]);
+    const subscription = get<{ status: string }>("SELECT status FROM subscriptions WHERE org_id = ?", [orgId]);
+    if (!org || org.status === "suspended" || subscription?.status === "suspended" || subscription?.status === "cancelled") {
+      destroySession(token);
+      return null;
+    }
+  }
+  return { user: toSessionUser(u), orgId, token };
 }
 
 export async function switchSessionOrg(token: string, orgId: string) {

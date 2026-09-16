@@ -12,6 +12,7 @@ const check = (name, ok, detail = "") => { if (ok) { passed++; console.log(`  \x
 function client() {
   let cookie = "";
   return {
+    setSessionToken(token) { cookie = `hos_session=${token}`; },
     async json(p, method, value) {
       const res = await fetch(BASE + p, { method, headers: { "Content-Type": "application/json", ...(cookie ? { Cookie: cookie } : {}) }, body: value === undefined ? undefined : JSON.stringify(value), redirect: "manual" });
       for (const c of res.headers.getSetCookie?.() ?? []) if (c.startsWith("hos_session=")) cookie = c.split(";")[0];
@@ -59,13 +60,46 @@ const tenant = r.body.tenants?.find((t) => t.name === `OTP Hospital ${uniq}`);
 check("platform console sees the new hospital and service status", r.ok && tenant?.services?.voice && tenant?.services?.storage);
 if (tenant) {
   r = await platform.json("/api/platform/tenants", "PATCH", {
-    orgId: tenant.id, plan: "growth", subscriptionStatus: "active", orgStatus: "active",
+    orgId: tenant.id, plan: "front_desk", subscriptionStatus: "active", orgStatus: "active",
     seats: 25, voiceMinutesCap: 2500, monthlyFee: 19000, features: ["appointments", "billing", "analytics"],
   });
   check("platform administrator updates the subscription", r.ok, JSON.stringify(r.body));
   r = await platform.json("/api/platform/tenants", "GET");
   const changed = r.body.tenants?.find((t) => t.id === tenant.id);
-  check("subscription update persisted", changed?.subscription?.plan === "growth" && changed?.subscription?.seats === 25 && changed?.subscription?.features?.length === 3);
+  check("subscription update persisted", changed?.subscription?.plan === "front_desk" && changed?.subscription?.seats === 25 && changed?.subscription?.features?.length === 3);
+
+  /* Password recovery deliberately revoked the signup session above. Create a
+     known hospital-admin session so these checks prove role denial and live
+     tenant suspension rather than merely proving that anonymous calls fail. */
+  const tenantDb = new DatabaseSync(DB);
+  const tenantUser = tenantDb.prepare("SELECT id, org_id FROM users WHERE email = ?").get(email);
+  const tenantSession = randomBytes(32).toString("hex");
+  tenantDb.prepare("INSERT INTO sessions (token,user_id,org_id,created_at,expires_at,ip) VALUES (?,?,?,?,?,?)")
+    .run(tenantSession, tenantUser.id, tenantUser.org_id, new Date().toISOString(), new Date(Date.now() + 3600_000).toISOString(), "test");
+  tenantDb.close();
+  account.setSessionToken(tenantSession);
+
+  r = await account.json("/api/platform/tenants", "PATCH", {
+    orgId: tenant.id, plan: "front_desk", subscriptionStatus: "active", orgStatus: "active",
+    seats: 25, voiceMinutesCap: 2500, monthlyFee: 150000, features: ["appointments"],
+  });
+  check("hospital administrator cannot use platform subscription API", r.status === 403);
+
+  r = await platform.json("/api/platform/tenants", "PATCH", {
+    orgId: tenant.id, plan: "front_desk", subscriptionStatus: "suspended", orgStatus: "suspended",
+    seats: 25, voiceMinutesCap: 2500, monthlyFee: 150000, features: ["appointments"],
+  });
+  check("platform administrator can suspend a hospital", r.ok);
+  r = await account.json("/api/bootstrap", "GET");
+  check("suspension immediately revokes an existing hospital session", r.ok && r.body.authenticated === false);
+  r = await client().json("/api/auth/login", "POST", { email, password: "ChangedPassword456" });
+  check("suspended hospital cannot create a new session", r.status === 403);
+
+  r = await platform.json("/api/platform/tenants", "PATCH", {
+    orgId: tenant.id, plan: "front_desk", subscriptionStatus: "active", orgStatus: "active",
+    seats: 25, voiceMinutesCap: 2500, monthlyFee: 150000, features: ["appointments", "billing", "analytics"],
+  });
+  check("platform administrator can reactivate a hospital", r.ok);
 }
 
 console.log(`\n\x1b[1m${passed} passed, ${failed} failed\x1b[0m`);

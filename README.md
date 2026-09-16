@@ -1,6 +1,6 @@
 # Hospital AI OS
 
-Deployment and evaluation guides: [DEPLOYMENT.md](DEPLOYMENT.md) · [PILOT-AND-HOSTING.md](PILOT-AND-HOSTING.md) · [SECURITY-SAAS-REVIEW.md](SECURITY-SAAS-REVIEW.md)
+Deployment and evaluation guides: [DEPLOYMENT.md](DEPLOYMENT.md) · [ORACLE-DEPLOYMENT.md](ORACLE-DEPLOYMENT.md) · [PILOT-AND-HOSTING.md](PILOT-AND-HOSTING.md) · [SECURITY-SAAS-REVIEW.md](SECURITY-SAAS-REVIEW.md)
 
 **Multi-tenant hospital operating system — one patient record, many visits.**
 

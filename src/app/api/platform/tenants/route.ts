@@ -2,6 +2,7 @@ import { body, handler } from "@/lib/server/route";
 import { audit, HttpError, requireSession } from "@/lib/server/auth";
 import { all, get, nowIso, run, settings } from "@/lib/server/db";
 import { ALL_FEATURES, DEFAULT_STORAGE, DEFAULT_VOICE, getSubscription } from "@/lib/server/provision";
+import { SUBSCRIPTION_PLAN_KEYS } from "@/lib/plans";
 
 export async function GET() {
   return handler(async () => {
@@ -33,7 +34,7 @@ export async function GET() {
   });
 }
 
-const PLANS = new Set(["trial", "care", "growth", "enterprise"]);
+const PLANS = new Set<string>(SUBSCRIPTION_PLAN_KEYS);
 const SUB_STATUSES = new Set(["trialing", "active", "past_due", "suspended", "cancelled"]);
 const ORG_STATUSES = new Set(["trial", "active", "suspended"]);
 
@@ -62,6 +63,9 @@ export async function PATCH(req: Request) {
        monthly_fee = ?, features = ?, updated_at = ? WHERE org_id = ?`,
       [b.plan, b.subscriptionStatus, seats, cap, fee, JSON.stringify(features), nowIso(), b.orgId],
     );
+    if (b.orgStatus === "suspended" || b.subscriptionStatus === "suspended" || b.subscriptionStatus === "cancelled") {
+      run("DELETE FROM sessions WHERE org_id = ?", [b.orgId]);
+    }
     audit(session, "platform.subscription.updated", `${b.orgId}: ${b.plan}/${b.subscriptionStatus}, ${seats} seats`, "critical");
     return { ok: true };
   });

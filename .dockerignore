@@ -1,0 +1,14 @@
+.git
+.github
+.next
+node_modules
+.data
+.oracle-data
+.oracle-backups
+backups
+test-results
+playwright-report
+.env*
+!.env.example
+npm-debug.log*
+

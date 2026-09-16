@@ -6,12 +6,7 @@ import { Denied } from "@/components/AppShell";
 import { Badge, Button, Card, CardHeader, PageHeader, Progress, StatTile } from "@/components/ui";
 import { cx, fmtDate, inr } from "@/lib/utils";
 import { CheckCircle2, CreditCard, Lock, Radio, Sparkles, Users, Zap } from "lucide-react";
-
-const PLANS = [
-  { key: "front_desk", name: "AI Front Desk", price: 200000, blurb: "Receptionist, appointments, reminders and messaging.", minutes: 5000, seats: 25 },
-  { key: "care", name: "AI Care", price: 450000, blurb: "Front desk plus follow-up agent, clinical queues and escalation.", minutes: 20000, seats: 100 },
-  { key: "enterprise", name: "Enterprise", price: 0, blurb: "Multi-hospital, HIS/FHIR, SSO, dedicated deployment and SLA.", minutes: 0, seats: 0 },
-];
+import { PLAN_CATALOG } from "@/lib/plans";
 
 export default function PlanPage() {
   const { can, subscription, featureCatalog, org, users, notify } = useStore();
@@ -129,7 +124,7 @@ export default function PlanPage() {
       <Card>
         <CardHeader title="Plans" subtitle="Indicative commercial bands — final pricing follows discovery" icon={<CreditCard size={16} />} />
         <div className="grid gap-3 lg:grid-cols-3">
-          {PLANS.map((p) => (
+          {PLAN_CATALOG.map((p) => (
             <div key={p.key} className={cx("rounded-xl border p-4", subscription.plan === p.key ? "border-brand-500 bg-brand-50/50 ring-1 ring-brand-500/20" : "border-ink-200")}>
               <div className="flex items-center justify-between">
                 <p className="text-sm font-semibold text-ink-900">{p.name}</p>

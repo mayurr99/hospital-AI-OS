@@ -29,7 +29,7 @@ const PLANS = [
   },
   {
     name: "AI Care",
-    price: "₹2–8 lakh",
+    price: "₹1.5–6 lakh",
     sub: "per hospital / month",
     features: ["Everything in the trial", "Retell + ElevenLabs live voice", "Your own S3 bucket", "Unlimited staff seats", "HIS / FHIR integration", "Priority support"],
     cta: "Start free trial",
