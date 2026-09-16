@@ -160,6 +160,9 @@ npm run test:disaster     # proves the restore actually works
 |---|---|
 | `DATA_DIR` | Where the database and recordings live. **Must be on persistent storage.** |
 | `STORAGE_ENCRYPTION_KEY` | 64 hex characters or 32 bytes encoded as base64. Without it, recordings and exports are plaintext on disk, and the system status page says so. |
+| `RESEND_API_KEY` | Server-only Resend API key for transactional login and recovery codes. |
+| `EMAIL_FROM` | Verified sender such as `Hospital AI OS <security@hospital.example>`. Recovery email is enabled only when this and `RESEND_API_KEY` are set. |
+| `LOGIN_OTP_CHANNEL` | Leave unset for authenticator-app MFA. Set to `email` to send the post-password login code by email. |
 | `SEED_DEMO` | `0` on any real deployment. `1` creates two demo hospitals whose shared password the sign-in screen prints. |
 | `MFA_FLOOR` | Leave unset. `off` removes the automatic second-factor requirement for anyone who can open a patient record. |
 | `ALLOW_INSECURE_COOKIES` | Only for a deliberate plain-HTTP deployment on an internal network. Never on the public internet. |

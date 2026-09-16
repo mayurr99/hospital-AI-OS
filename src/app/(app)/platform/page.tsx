@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useStore } from "@/lib/store";
 import { Denied } from "@/components/AppShell";
-import { Badge, Button, Card, CardHeader, EmptyState, Modal, PageHeader, Progress, StatTile, Table, Td, Textarea, Th, Tr } from "@/components/ui";
+import { Badge, Button, Card, CardHeader, EmptyState, Field, Input, Modal, PageHeader, Progress, Select, StatTile, Table, Td, Textarea, Th, Tr } from "@/components/ui";
 import { fmtDate, inr, pct, relative } from "@/lib/utils";
 import { AlertTriangle, ArrowUpRight, Building2, Globe2, IndianRupee, Lock, Radio, Users } from "lucide-react";
 
@@ -35,7 +35,10 @@ interface Tenant {
     monthlyFee: number;
     features: string[];
   } | null;
+  services: { voice: string; storage: string };
 }
+
+interface Feature { key: string; label: string; group: string }
 
 export default function PlatformPage() {
   const { can, setActiveOrg, notify } = useStore();
@@ -43,12 +46,15 @@ export default function PlatformPage() {
   const [tenants, setTenants] = useState<Tenant[]>([]);
   const [loading, setLoading] = useState(true);
   const [entering, setEntering] = useState<Tenant | null>(null);
+  const [managing, setManaging] = useState<Tenant | null>(null);
+  const [availableFeatures, setAvailableFeatures] = useState<Feature[]>([]);
+  const [saving, setSaving] = useState(false);
   const [justification, setJustification] = useState("");
 
   useEffect(() => {
     fetch("/api/platform/tenants")
       .then((r) => r.json())
-      .then((d) => setTenants(d.tenants ?? []))
+      .then((d) => { setTenants(d.tenants ?? []); setAvailableFeatures(d.availableFeatures ?? []); })
       .catch(() => setTenants([]))
       .finally(() => setLoading(false));
   }, []);
@@ -87,7 +93,7 @@ export default function PlatformPage() {
         ) : (
           <Table>
             <thead>
-              <tr><Th>Hospital</Th><Th>Plan</Th><Th>Subscription</Th><Th>Setup</Th><Th>Voice usage</Th><Th>Data</Th><Th>Joined</Th><Th /></tr>
+              <tr><Th>Hospital</Th><Th>Plan</Th><Th>Subscription</Th><Th>Services</Th><Th>Voice usage</Th><Th>Data</Th><Th>Joined</Th><Th /></tr>
             </thead>
             <tbody>
               {tenants.map((t) => {
@@ -119,11 +125,11 @@ export default function PlatformPage() {
                       )}
                       {sub && sub.monthlyFee > 0 && <span className="mt-0.5 block text-[11px] text-ink-500">{inr(sub.monthlyFee, true)}/mo</span>}
                     </Td>
-                    <Td>
-                      <Badge tone={t.onboardingComplete ? "green" : "amber"}>
-                        {t.onboardingComplete ? "configured" : "setup pending"}
-                      </Badge>
-                      {sub && <span className="mt-0.5 block text-[11px] text-ink-400">{sub.features.length} features on</span>}
+                    <Td className="text-xs text-ink-600">
+                      <Badge tone={t.onboardingComplete ? "green" : "amber"}>{t.onboardingComplete ? "configured" : "setup pending"}</Badge>
+                      <span className="mt-1 block">Voice: {t.services.voice}</span>
+                      <span className="block">Storage: {t.services.storage}</span>
+                      {sub && <span className="block text-[11px] text-ink-400">{sub.features.length} services enabled</span>}
                     </Td>
                     <Td className="w-40">
                       <div className="flex items-center gap-2">
@@ -140,9 +146,10 @@ export default function PlatformPage() {
                     </Td>
                     <Td className="text-xs text-ink-500">{fmtDate(t.createdAt)}<span className="block text-[10px] text-ink-400">{relative(t.createdAt)}</span></Td>
                     <Td>
-                      <Button size="sm" icon={<ArrowUpRight size={13} />} onClick={() => { setEntering(t); setJustification(""); }}>
-                        Open workspace
-                      </Button>
+                      <div className="flex flex-col gap-1.5">
+                        <Button size="sm" onClick={() => setManaging(structuredClone(t))}>Manage plan</Button>
+                        <Button size="sm" icon={<ArrowUpRight size={13} />} onClick={() => { setEntering(t); setJustification(""); }}>Open workspace</Button>
+                      </div>
                     </Td>
                   </Tr>
                 );
@@ -151,6 +158,67 @@ export default function PlatformPage() {
           </Table>
         )}
       </Card>
+
+      <Modal
+        open={Boolean(managing)}
+        onClose={() => setManaging(null)}
+        title="Hospital subscription"
+        subtitle={managing?.name}
+        footer={<>
+          <Button onClick={() => setManaging(null)}>Cancel</Button>
+          <Button variant="primary" disabled={saving} onClick={async () => {
+            if (!managing?.subscription) return;
+            setSaving(true);
+            try {
+              const res = await fetch("/api/platform/tenants", {
+                method: "PATCH", headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  orgId: managing.id, plan: managing.subscription.plan,
+                  subscriptionStatus: managing.subscription.status, orgStatus: managing.status,
+                  seats: managing.subscription.seats, voiceMinutesCap: managing.subscription.voiceMinutesCap,
+                  monthlyFee: managing.subscription.monthlyFee, features: managing.subscription.features,
+                }),
+              });
+              const data = await res.json();
+              if (!res.ok) throw new Error(data.error ?? "Could not save subscription");
+              setTenants((rows) => rows.map((t) => t.id === managing.id ? managing : t));
+              notify(`Updated ${managing.shortName} subscription`);
+              setManaging(null);
+            } catch (e) { notify(e instanceof Error ? e.message : "Could not save subscription"); }
+            finally { setSaving(false); }
+          }}>{saving ? "Saving…" : "Save subscription"}</Button>
+        </>}
+      >
+        {managing?.subscription && <div className="space-y-4">
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Field label="Plan"><Select value={managing.subscription.plan} onChange={(e) => setManaging({ ...managing, plan: e.target.value, subscription: { ...managing.subscription!, plan: e.target.value } })}>
+              {['trial','care','growth','enterprise'].map((v) => <option key={v} value={v}>{v}</option>)}
+            </Select></Field>
+            <Field label="Billing status"><Select value={managing.subscription.status} onChange={(e) => setManaging({ ...managing, subscription: { ...managing.subscription!, status: e.target.value } })}>
+              {['trialing','active','past_due','suspended','cancelled'].map((v) => <option key={v} value={v}>{v.replaceAll('_',' ')}</option>)}
+            </Select></Field>
+            <Field label="Hospital status"><Select value={managing.status} onChange={(e) => setManaging({ ...managing, status: e.target.value })}>
+              {['trial','active','suspended'].map((v) => <option key={v} value={v}>{v}</option>)}
+            </Select></Field>
+            <Field label="Seats"><Input type="number" min={1} value={managing.subscription.seats} onChange={(e) => setManaging({ ...managing, subscription: { ...managing.subscription!, seats: Number(e.target.value) } })} /></Field>
+            <Field label="Voice minutes"><Input type="number" min={0} value={managing.subscription.voiceMinutesCap} onChange={(e) => setManaging({ ...managing, subscription: { ...managing.subscription!, voiceMinutesCap: Number(e.target.value) } })} /></Field>
+            <Field label="Monthly fee (₹)"><Input type="number" min={0} value={managing.subscription.monthlyFee} onChange={(e) => setManaging({ ...managing, subscription: { ...managing.subscription!, monthlyFee: Number(e.target.value) } })} /></Field>
+          </div>
+          <div>
+            <p className="mb-2 text-xs font-medium text-ink-700">Enabled services</p>
+            <div className="grid max-h-56 gap-2 overflow-auto rounded-lg border border-ink-200 p-3 sm:grid-cols-2">
+              {availableFeatures.map((f) => <label key={f.key} className="flex items-start gap-2 text-xs text-ink-700">
+                <input type="checkbox" className="mt-0.5" checked={managing.subscription!.features.includes(f.key)} onChange={(e) => {
+                  const current = managing.subscription!.features;
+                  const features = e.target.checked ? [...current, f.key] : current.filter((x) => x !== f.key);
+                  setManaging({ ...managing, subscription: { ...managing.subscription!, features } });
+                }} />
+                <span><b className="font-medium">{f.label}</b><span className="block text-ink-400">{f.group}</span></span>
+              </label>)}
+            </div>
+          </div>
+        </div>}
+      </Modal>
 
       <Card className="mt-4">
         <CardHeader title="Platform access governance" icon={<Lock size={16} />} />

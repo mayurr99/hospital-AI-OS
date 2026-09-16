@@ -1,5 +1,7 @@
 # Hospital AI OS
 
+Deployment and evaluation guides: [DEPLOYMENT.md](DEPLOYMENT.md) · [PILOT-AND-HOSTING.md](PILOT-AND-HOSTING.md) · [SECURITY-SAAS-REVIEW.md](SECURITY-SAAS-REVIEW.md)
+
 **Multi-tenant hospital operating system — one patient record, many visits.**
 
 Hospital → Patient → Visit / Encounter / Admission → Clinical records · Laboratory · Medication ·
@@ -313,7 +315,7 @@ deletes, recording fetches and export downloads — all refused.
 | Layer | Today | Next step |
 |---|---|---|
 | Database | SQLite via `node:sqlite` | Postgres behind the same `db.ts` surface; the `records` table becomes real tables where you need joins |
-| Auth | scrypt + DB sessions | Add OIDC/SAML for hospital SSO; real TOTP for the MFA step |
+| Auth | scrypt, DB sessions, authenticator MFA, optional emailed login OTP, emailed recovery OTP | Add OIDC/SAML for hospital SSO |
 | Voice | Retell + ElevenLabs adapters, simulator fallback | Point the webhook at a public URL; add SIP trunking for inbound |
 | Billing | Plan, seats and minutes enforced server-side | Wire Razorpay or Stripe to the subscription row |
 | Protocols | Versioned, approved, deterministic | Unchanged — this is already the production design |

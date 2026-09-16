@@ -176,6 +176,21 @@ export function hashBackupCode(code: string): string {
   return `${salt}$${scryptSync(norm, salt, 32, BACKUP_SCRYPT).toString("hex")}`;
 }
 
+/** Hash a short, server-generated OTP. Its strict six-digit format is checked by the caller. */
+export function hashOtpCode(code: string): string {
+  const salt = randomBytes(12).toString("hex");
+  return `${salt}$${scryptSync(code, salt, 32, BACKUP_SCRYPT).toString("hex")}`;
+}
+
+export function matchOtpCode(code: string, stored: string): boolean {
+  if (!/^\d{6}$/.test(code ?? "")) return false;
+  const [salt, expected] = String(stored).split("$");
+  if (!salt || !expected) return false;
+  const derived = scryptSync(code, salt, 32, BACKUP_SCRYPT);
+  const expectedBuf = Buffer.from(expected, "hex");
+  return derived.length === expectedBuf.length && timingSafeEqual(derived, expectedBuf);
+}
+
 /**
  * Find which stored backup hash a code matches, or -1.
  *

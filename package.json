@@ -11,7 +11,7 @@
     "typecheck": "tsc --noEmit",
     "test:api": "node tests/suite.mjs",
     "test:ui": "node tests/ui.mjs",
-    "test": "node tests/suite.mjs && node tests/clinical.mjs && node tests/auth.mjs && node tests/crud.mjs && node tests/security.mjs && node tests/concurrency.mjs && node tests/ui.mjs && node tests/clinical-ui.mjs && node tests/ux.mjs && node tests/connected.mjs && node tests/auth-ui.mjs",
+    "test": "node tests/suite.mjs && node tests/clinical.mjs && node tests/auth.mjs && node tests/recovery-platform.mjs && node tests/crud.mjs && node tests/security.mjs && node tests/concurrency.mjs && node tests/ui.mjs && node tests/clinical-ui.mjs && node tests/ux.mjs && node tests/connected.mjs && node tests/auth-ui.mjs",
     "test:connected": "node tests/connected.mjs",
     "db:reset": "rm -rf .data && echo 'Database reset — demo hospitals will be reseeded on next boot'",
     "test:clinical": "node tests/clinical.mjs",
@@ -23,7 +23,8 @@
     "demo:reset": "node scripts/reset-demo.mjs",
     "test:security": "node tests/security.mjs",
     "test:concurrency": "node tests/concurrency.mjs",
-    "test:crud": "node tests/crud.mjs"
+    "test:crud": "node tests/crud.mjs",
+    "test:recovery-platform": "node tests/recovery-platform.mjs"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1131.0",

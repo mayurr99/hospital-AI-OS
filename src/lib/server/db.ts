@@ -229,6 +229,18 @@ function migrate(conn: DatabaseSync) {
     );
     CREATE INDEX IF NOT EXISTS password_resets_user ON password_resets (user_id, created_at DESC);
 
+    CREATE TABLE IF NOT EXISTS recovery_challenges (
+      id          TEXT PRIMARY KEY,
+      email       TEXT NOT NULL,
+      code_hash   TEXT NOT NULL,
+      attempts    INTEGER NOT NULL DEFAULT 0,
+      verified_at TEXT,
+      created_at  TEXT NOT NULL,
+      expires_at  TEXT NOT NULL,
+      used_at     TEXT
+    );
+    CREATE INDEX IF NOT EXISTS recovery_challenges_email ON recovery_challenges (email, created_at DESC);
+
     CREATE TABLE IF NOT EXISTS subscriptions (
       org_id             TEXT PRIMARY KEY,
       plan               TEXT NOT NULL DEFAULT 'trial',
@@ -343,6 +355,8 @@ function migrate(conn: DatabaseSync) {
   addColumn(conn, "users", "mfa_confirmed_at", "TEXT");
   addColumn(conn, "users", "mfa_backup_codes", "TEXT NOT NULL DEFAULT '[]'");
   addColumn(conn, "users", "mfa_last_step", "INTEGER NOT NULL DEFAULT 0");
+  addColumn(conn, "mfa_challenges", "delivery", "TEXT NOT NULL DEFAULT 'authenticator'");
+  addColumn(conn, "mfa_challenges", "code_hash", "TEXT");
 
   // The relational clinical core lives in its own module.
   migrateClinical(conn);

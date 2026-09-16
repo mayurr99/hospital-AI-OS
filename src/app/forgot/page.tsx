@@ -17,6 +17,10 @@ export default function ForgotPage() {
   const [email, setEmail] = useState("");
   const [busy, setBusy] = useState(false);
   const [sent, setSent] = useState<string | null>(null);
+  const [delivery, setDelivery] = useState<"email" | "administrator" | null>(null);
+  const [challenge, setChallenge] = useState("");
+  const [code, setCode] = useState("");
+  const [accounts, setAccounts] = useState<{ userId: string; hospital: string; role: string }[]>([]);
   const [error, setError] = useState<string | null>(null);
 
   async function submit(e: React.FormEvent) {
@@ -29,11 +33,40 @@ export default function ForgotPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email }),
       });
-      const data = await readJson<{ error?: string; message?: string }>(res);
+      const data = await readJson<{ error?: string; message?: string; delivery?: "email" | "administrator"; challenge?: string }>(res);
       if (!res.ok) throw new Error(data.error ?? "Could not send the request");
       setSent(data.message ?? "Request received.");
+      setDelivery(data.delivery ?? "administrator");
+      setChallenge(data.challenge ?? "");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not send the request");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function verify(userId?: string) {
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/auth/recovery/verify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ challenge, code, userId }),
+      });
+      const data = await readJson<{
+        error?: string; resetPath?: string; needsAccountChoice?: boolean;
+        accounts?: { userId: string; hospital: string; role: string }[];
+      }>(res);
+      if (!res.ok) throw new Error(data.error ?? "That code could not be verified");
+      if (data.needsAccountChoice) {
+        setAccounts(data.accounts ?? []);
+      } else if (data.resetPath) {
+        window.location.assign(data.resetPath);
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "That code could not be verified");
+      setCode("");
     } finally {
       setBusy(false);
     }
@@ -46,7 +79,35 @@ export default function ForgotPage() {
           <ArrowLeft size={13} /> Back to sign in
         </Link>
 
-        {sent ? (
+        {sent && delivery === "email" ? (
+          <>
+            <div className="flex items-center gap-2 text-brand-700">
+              <Mail size={18} />
+              <h1 className="text-lg font-semibold tracking-tight">Check your email</h1>
+            </div>
+            <p className="mt-2 text-sm leading-relaxed text-ink-600">{sent}</p>
+            {error && <p className="mt-3 rounded-lg bg-rose-50 p-2 text-sm text-rose-800">{error}</p>}
+            {accounts.length ? (
+              <div className="mt-4 space-y-2">
+                <p className="text-xs text-ink-500">Choose the account whose password you want to change.</p>
+                {accounts.map((a) => (
+                  <Button key={a.userId} className="w-full" disabled={busy} onClick={() => verify(a.userId)}>
+                    {a.hospital} · {a.role.replaceAll("_", " ")}
+                  </Button>
+                ))}
+              </div>
+            ) : (
+              <div className="mt-4 space-y-3">
+                <Field label="6-digit recovery code" hint="Use the newest code. It expires in 10 minutes and works once.">
+                  <Input value={code} onChange={(e) => setCode(e.target.value.replace(/\D/g, "").slice(0, 6))} inputMode="numeric" autoComplete="one-time-code" placeholder="123456" />
+                </Field>
+                <Button variant="primary" className="w-full" disabled={busy || code.length !== 6} onClick={() => verify()}>
+                  {busy ? "Checking…" : "Verify code"}
+                </Button>
+              </div>
+            )}
+          </>
+        ) : sent ? (
           <>
             <div className="flex items-center gap-2 text-brand-700">
               <Mail size={18} />
@@ -91,8 +152,8 @@ export default function ForgotPage() {
             </form>
 
             <p className="mt-4 text-[11px] leading-relaxed text-ink-400">
-              Nothing is emailed — this deployment has no mail server configured. The link is handed to you by
-              an administrator, who will check who you are first.
+              When transactional email is configured, a one-time recovery code is sent immediately. Otherwise
+              an administrator verifies your identity and issues a single-use reset link.
             </p>
           </>
         )}

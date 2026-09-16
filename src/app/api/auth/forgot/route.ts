@@ -3,6 +3,8 @@ import { body, handler } from "@/lib/server/route";
 import { listUsersByEmail } from "@/lib/server/auth";
 import { writeAudit } from "@/lib/server/db";
 import { callerIp, hit, LOGIN_PER_IP } from "@/lib/server/ratelimit";
+import { emailConfigured, sendRecoveryOtp } from "@/lib/server/email";
+import { createRecoveryChallenge, fakeRecoveryChallenge } from "@/lib/server/recovery";
 
 interface ForgotBody { email: string }
 
@@ -16,11 +18,9 @@ interface ForgotBody { email: string }
  * patient here. That is why the response talks about "if that address belongs
  * to an account" rather than confirming anything.
  *
- * **It does not claim to have sent an email.** The product has no mail
- * transport configured, and a message saying "check your inbox" would leave a
- * nurse refreshing an inbox at the start of a shift for something that is never
- * coming. What actually happens is recorded for the hospital's administrators,
- * who issue the link — and the wording on screen says exactly that.
+ * When transactional email is configured, a one-time code is sent. Without it,
+ * the existing administrator-assisted recovery remains available and the UI is
+ * explicit about which mode this deployment is using.
  */
 export async function POST(req: Request) {
   return handler(async () => {
@@ -36,18 +36,42 @@ export async function POST(req: Request) {
       );
     }
 
-    const same = {
+    const mailReady = emailConfigured();
+    const same: { ok: true; message: string; delivery: "email" | "administrator"; challenge?: string } = {
       ok: true,
-      message:
-        "If that address belongs to an account, your hospital's administrators have been asked to issue a reset link. " +
-        "They will give it to you directly — nothing is emailed.",
+      delivery: mailReady ? "email" : "administrator",
+      message: mailReady
+        ? "If that address belongs to an active account, a one-time recovery code has been sent."
+        : "If that address belongs to an account, your hospital's administrators have been asked to issue a reset link. They will give it to you directly — nothing is emailed.",
     };
 
-    if (!email || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return same;
+    if (!email || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
+      if (mailReady) same.challenge = fakeRecoveryChallenge();
+      return same;
+    }
 
     const users = listUsersByEmail(email);
     /* No account: identical response, no record written, nothing to time. */
-    if (!users.length) return same;
+    if (!users.length) {
+      if (mailReady) same.challenge = fakeRecoveryChallenge();
+      return same;
+    }
+
+    if (mailReady) {
+      const issued = createRecoveryChallenge(email);
+      same.challenge = issued.challenge;
+      try {
+        await sendRecoveryOtp(email, issued.code);
+      } catch (error) {
+        console.error("[email] recovery OTP delivery failed", error instanceof Error ? error.message : "unknown error");
+        for (const u of users) {
+          writeAudit({
+            orgId: u.org_id, actor: u.name, actorRole: u.role,
+            action: "user.password_recovery_delivery_failed", target: u.email, severity: "critical", ip,
+          });
+        }
+      }
+    }
 
     for (const u of users) {
       if (u.status === "suspended") continue;
@@ -56,7 +80,7 @@ export async function POST(req: Request) {
         actor: u.name,
         actorRole: u.role,
         action: "user.password_reset_requested",
-        target: `${u.email} — waiting for an administrator to issue a link`,
+        target: mailReady ? `${u.email} — email OTP requested` : `${u.email} — waiting for an administrator to issue a link`,
         severity: "warning",
         ip,
       });

@@ -3,7 +3,7 @@ import { body, handler } from "@/lib/server/route";
 import { HttpError, type DbUser } from "@/lib/server/auth";
 import { get, writeAudit } from "@/lib/server/db";
 import {
-  attemptsAllowed, destroyChallenge, readChallenge, recordFailedAttempt, verifyUserCode,
+  attemptsAllowed, destroyChallenge, readChallenge, recordFailedAttempt, verifyEmailCode, verifyUserCode,
 } from "@/lib/server/mfa";
 import { completeSignIn } from "@/lib/server/signin";
 import { callerIp, hit, LOGIN_PER_IP } from "@/lib/server/ratelimit";
@@ -48,7 +48,9 @@ export async function POST(req: Request) {
       throw new HttpError(403, "This account is not active. Contact your administrator.");
     }
 
-    const result = verifyUserCode(user, b.code ?? "");
+    const result = challenge.delivery === "email"
+      ? verifyEmailCode(challenge, b.code ?? "")
+      : verifyUserCode(user, b.code ?? "");
     if (!result.ok) {
       const alive = recordFailedAttempt(challenge);
       writeAudit({
@@ -86,7 +88,7 @@ export async function POST(req: Request) {
     return completeSignIn(
       user,
       ip,
-      result.usedBackupCode ? "password+backup_code" : "password+totp",
+      result.usedBackupCode ? "password+backup_code" : challenge.delivery === "email" ? "password+email_otp" : "password+totp",
       result.usedBackupCode
         ? { usedBackupCode: true, backupCodesRemaining: result.backupCodesRemaining }
         : {},

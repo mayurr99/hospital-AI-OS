@@ -56,14 +56,14 @@ export function QrMatrix({ qr, px = 208 }: { qr: QrData; px?: number }) {
 /* --------------------------- code input ---------------------------- */
 
 function CodeInput({
-  value, onChange, onSubmit, busy, label = "6-digit code",
+  value, onChange, onSubmit, busy, label = "6-digit code", hint = "From your authenticator app. A backup code works here too.",
 }: {
-  value: string; onChange: (v: string) => void; onSubmit: () => void; busy: boolean; label?: string;
+  value: string; onChange: (v: string) => void; onSubmit: () => void; busy: boolean; label?: string; hint?: string;
 }) {
   const ref = useRef<HTMLInputElement>(null);
   useEffect(() => { ref.current?.focus(); }, []);
   return (
-    <Field label={label} hint="From your authenticator app. A backup code works here too.">
+    <Field label={label} hint={hint}>
       <Input
         ref={ref}
         value={value}
@@ -164,8 +164,8 @@ export function BackupCodes({ codes, onDone, doneLabel = "I have saved these" }:
 /* ------------------------- verify (sign-in) ------------------------ */
 
 export function MfaVerifyStep({
-  challenge, name, onBack,
-}: { challenge: string; name?: string; onBack: () => void }) {
+  challenge, name, channel = "authenticator", email, onBack,
+}: { challenge: string; name?: string; channel?: "authenticator" | "email"; email?: string; onBack: () => void }) {
   const [code, setCode] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -205,8 +205,9 @@ export function MfaVerifyStep({
         <h2 className="text-xl font-semibold tracking-tight text-ink-900">Two-step sign-in</h2>
       </div>
       <p className="mt-1 text-sm text-ink-500">
-        {name ? `Hello ${name.split(" ")[0]} — open` : "Open"} your authenticator app and enter the code it
-        is showing for this account.
+        {channel === "email"
+          ? `A one-time code was sent to ${email ?? "your registered email"}. It expires in 10 minutes.`
+          : `${name ? `Hello ${name.split(" ")[0]} — open` : "Open"} your authenticator app and enter the code it is showing for this account.`}
       </p>
 
       {error && (
@@ -216,15 +217,23 @@ export function MfaVerifyStep({
       )}
 
       <div className="mt-4">
-        <CodeInput value={code} onChange={setCode} onSubmit={submit} busy={busy} />
+        <CodeInput
+          value={code}
+          onChange={setCode}
+          onSubmit={submit}
+          busy={busy}
+          hint={channel === "email" ? "Use the newest code from your email. It works once." : undefined}
+        />
       </div>
       <Button variant="primary" className="mt-3 w-full" disabled={busy || code.trim().length < 6} onClick={submit}>
         {busy ? "Checking…" : "Verify and sign in"}
       </Button>
-      <p className="mt-4 text-[11px] leading-relaxed text-ink-400">
-        Lost your phone? Use one of your backup codes above. If you have none left, your hospital
-        administrator can reset the authenticator on your account.
-      </p>
+      {channel === "authenticator" && (
+        <p className="mt-4 text-[11px] leading-relaxed text-ink-400">
+          Lost your phone? Use one of your backup codes above. If you have none left, your hospital
+          administrator can reset the authenticator on your account.
+        </p>
+      )}
     </div>
   );
 }

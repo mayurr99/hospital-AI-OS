@@ -72,7 +72,7 @@ export default function LoginPage() {
    * It is not a session and grants nothing — the server will only exchange it
    * for one when a code is produced, so holding it in React state is safe.
    */
-  const [mfa, setMfa] = useState<{ mode: "verify" | "enrol"; challenge: string; name?: string } | null>(null);
+  const [mfa, setMfa] = useState<{ mode: "verify" | "enrol"; challenge: string; name?: string; channel?: "authenticator" | "email"; email?: string } | null>(null);
   const [newCodes, setNewCodes] = useState<{ codes: string[]; next: string } | null>(null);
   /*
    * Whether this deployment has demo hospitals at all.
@@ -118,6 +118,8 @@ export default function LoginPage() {
         mode?: "verify" | "enrol";
         challenge?: string;
         name?: string;
+        channel?: "authenticator" | "email";
+        email?: string;
         next?: string;
       }>(res);
       if (!res.ok) throw new Error(data.error ?? "Sign in failed");
@@ -127,7 +129,7 @@ export default function LoginPage() {
         return;
       }
       if (data.needsMfa && data.challenge) {
-        setMfa({ mode: data.mode ?? "verify", challenge: data.challenge, name: data.name });
+        setMfa({ mode: data.mode ?? "verify", challenge: data.challenge, name: data.name, channel: data.channel, email: data.email });
         setBusy(false);
         return;
       }
@@ -238,7 +240,7 @@ export default function LoginPage() {
               onComplete={(r) => setNewCodes({ codes: r.backupCodes, next: r.next ?? "/dashboard" })}
             />
           ) : mfa ? (
-            <MfaVerifyStep challenge={mfa.challenge} name={mfa.name} onBack={() => setMfa(null)} />
+            <MfaVerifyStep challenge={mfa.challenge} name={mfa.name} channel={mfa.channel} email={mfa.email} onBack={() => setMfa(null)} />
           ) : orgChoices ? (
             <>
               <button onClick={() => setOrgChoices(null)} className="mb-4 text-xs text-ink-500 hover:text-ink-800">← Back</button>

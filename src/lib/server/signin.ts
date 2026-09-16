@@ -16,6 +16,7 @@ export type Factor =
   | "password"
   | "password+totp"
   | "password+backup_code"
+  | "password+email_otp"
   /*
    * A visitor who pressed "explore the demo hospital". No credential was
    * presented, and the audit line has to say so — recording it as "password"

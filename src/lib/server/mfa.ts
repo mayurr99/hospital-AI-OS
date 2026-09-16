@@ -21,9 +21,9 @@
  * holding the records — the setting is a floor, not a dial.
  */
 
-import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
+import { createHash, randomBytes, randomInt, timingSafeEqual } from "node:crypto";
 import { all, get, id, nowIso, run, settings } from "./db";
-import { hashBackupCode, matchBackupCode, verifyTotp } from "./totp";
+import { hashBackupCode, hashOtpCode, matchBackupCode, matchOtpCode, verifyTotp } from "./totp";
 import type { DbUser, SessionUser } from "./auth";
 import { HttpError, effective, getSession } from "./auth";
 
@@ -150,6 +150,8 @@ export interface ChallengeRow {
   ip: string;
   created_at: string;
   expires_at: string;
+  delivery: "authenticator" | "email";
+  code_hash: string | null;
 }
 
 export function createChallenge(
@@ -175,6 +177,20 @@ export function createChallenge(
     ],
   );
   return token;
+}
+
+/** Create a password-verified challenge whose second factor is sent by email. */
+export function createEmailChallenge(userId: string, orgId: string | null, ip = "") {
+  run("DELETE FROM mfa_challenges WHERE expires_at < ?", [nowIso()]);
+  const token = randomBytes(32).toString("hex");
+  const code = String(randomInt(0, 1_000_000)).padStart(6, "0");
+  run(
+    `INSERT INTO mfa_challenges
+      (token, user_id, org_id, purpose, attempts, ip, created_at, expires_at, delivery, code_hash)
+     VALUES (?,?,?,'verify',0,?,?,?,?,?)`,
+    [token, userId, orgId, ip, nowIso(), new Date(Date.now() + CHALLENGE_MINUTES * 60000).toISOString(), "email", hashOtpCode(code)],
+  );
+  return { token, code };
 }
 
 export function readChallenge(token: string): ChallengeRow | null {
@@ -244,6 +260,11 @@ export function verifyUserCode(u: DbUser, code: string): VerifyOutcome {
   }
 
   return { ok: false, usedBackupCode: false, backupCodesRemaining: stored.length };
+}
+
+export function verifyEmailCode(challenge: ChallengeRow, code: string): VerifyOutcome {
+  const ok = Boolean(challenge.code_hash && matchOtpCode(code, challenge.code_hash));
+  return { ok, usedBackupCode: false, backupCodesRemaining: 0 };
 }
 
 /* ---------------------------- enrolment ---------------------------- */

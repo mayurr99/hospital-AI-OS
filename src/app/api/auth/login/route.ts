@@ -1,10 +1,11 @@
 import { NextResponse } from "next/server";
 import { body, handler } from "@/lib/server/route";
 import { HttpError, listUsersByEmail, toSessionUser, verifyPassword } from "@/lib/server/auth";
-import { createChallenge, isEnrolled, mfaRequired } from "@/lib/server/mfa";
+import { createChallenge, createEmailChallenge, isEnrolled, mfaRequired } from "@/lib/server/mfa";
 import { completeSignIn } from "@/lib/server/signin";
 import { get, writeAudit } from "@/lib/server/db";
 import { callerIp, clear, hit, LOGIN_PER_ACCOUNT, LOGIN_PER_IP } from "@/lib/server/ratelimit";
+import { emailConfigured, maskedEmail, sendLoginOtp } from "@/lib/server/email";
 
 interface LoginBody { email: string; password: string; orgId?: string }
 
@@ -80,6 +81,32 @@ export async function POST(req: Request) {
     const enrolled = isEnrolled(user);
     const required = mfaRequired(sessionUser);
 
+    /* Email OTP is opt-in at deployment level. It is useful where hospitals
+       require a delivered code; authenticator TOTP remains the default because
+       it does not depend on an inbox or an external provider. */
+    if ((enrolled || required) && process.env.LOGIN_OTP_CHANNEL === "email") {
+      if (!emailConfigured()) throw new HttpError(503, "Email sign-in codes are enabled but email delivery is not configured");
+      const issued = createEmailChallenge(user.id, user.org_id, ip);
+      try {
+        await sendLoginOtp(user.email, issued.code);
+      } catch (error) {
+        writeAudit({
+          orgId: user.org_id, actor: user.name, actorRole: user.role,
+          action: "login.email_otp_delivery_failed", target: user.email, severity: "critical", ip,
+        });
+        console.error("[email] sign-in OTP delivery failed", error instanceof Error ? error.message : "unknown error");
+        throw new HttpError(503, "The sign-in code could not be delivered. Try again or contact your administrator.");
+      }
+      writeAudit({
+        orgId: user.org_id, actor: user.name, actorRole: user.role,
+        action: "login.email_otp_sent", target: maskedEmail(user.email), ip,
+      });
+      return NextResponse.json({
+        needsMfa: true, mode: "verify", channel: "email", challenge: issued.token,
+        name: user.name, email: maskedEmail(user.email),
+      });
+    }
+
     if (enrolled || required) {
       const purpose = enrolled ? "verify" : "enrol";
       const challenge = createChallenge(user.id, user.org_id, purpose, ip);
@@ -94,6 +121,7 @@ export async function POST(req: Request) {
       return NextResponse.json({
         needsMfa: true,
         mode: purpose,
+        channel: "authenticator",
         challenge,
         /* Named so the sign-in screen can greet the right person without a second round trip. */
         name: user.name,
